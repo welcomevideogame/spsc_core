@@ -1,6 +1,6 @@
 use std::sync::{Arc, atomic::Ordering};
 
-use crate::spsc::{Inner, SendError};
+use crate::blocking_spsc::{Inner, SendError};
 
 #[derive(Debug)]
 pub struct Sender<T> {
@@ -34,5 +34,6 @@ impl<T> Sender<T> {
 impl<T> Drop for Sender<T> {
     fn drop(&mut self) {
         self.inner.closed.store(true, Ordering::Release);
+        self.inner.condvar.notify_one();
     }
 }

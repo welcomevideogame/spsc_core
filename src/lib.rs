@@ -1,1 +1,1 @@
-pub mod spsc;
+pub mod blocking_spsc;
