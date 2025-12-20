@@ -7,15 +7,18 @@ use crate::spsc::{Receiver, Sender};
 mod spsc;
 
 async fn send_loop(tx: Sender<i32>) -> Result<(), Box<dyn Error>> {
-    loop {
-        tx.send(10)?;
+    for i in 0..10 {
+        println!("Sending value {i}");
+        tx.send(i)?;
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
+    Ok(())
 }
 
 async fn recv_loop(rx: Receiver<i32>) -> Result<(), ()> {
     loop {
-        rx.recv();
+        dbg!(rx.recv());
+        tokio::time::sleep(Duration::from_secs(10)).await;
     }
 }
 
@@ -23,5 +26,5 @@ async fn recv_loop(rx: Receiver<i32>) -> Result<(), ()> {
 async fn main() {
     let (tx, rx) = spsc::channel::<i32>(10);
     let (x, y) = join!(send_loop(tx), recv_loop(rx));
-    dbg!(x, y);
+    _ = dbg!(x, y);
 }

@@ -9,7 +9,17 @@ pub struct Sender<T> {
 impl<T> Sender<T> {
     pub fn send(&self, item: T) -> Result<(), SendError<T>> {
         loop {
-            let lock = self.inner.lock();
+            let mut lock = match self.inner.lock() {
+                Ok(lock) => lock,
+                Err(_) => return Err(SendError(item)),
+            };
+            if lock.is_closed() {
+                return Err(SendError(item));
+            }
+            if lock.buffer.len() < lock.capacity {
+                lock.buffer.push_back(item);
+                return Ok(());
+            }
         }
     }
 }

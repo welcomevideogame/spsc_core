@@ -8,6 +8,11 @@ pub struct Receiver<T> {
 }
 impl<T> Receiver<T> {
     pub fn recv(&self) -> Option<T> {
-        todo!()
+        loop {
+            let mut lock = self.inner.lock().ok()?;
+            if let Some(item) = lock.buffer.pop_front() {
+                return Some(item);
+            }
+        }
     }
 }
