@@ -9,8 +9,14 @@ pub struct Sender<T> {
 
 impl<T> Sender<T> {
     pub fn send(&self, item: T) -> Result<(), SendError<T>> {
+        if self.inner.is_closed() {
+            return Err(SendError(item));
+        }
         let mut buffer_lock = self.inner.buffer.lock().unwrap();
         loop {
+            if self.inner.is_closed() {
+                return Err(SendError(item));
+            }
             if buffer_lock.len() < self.inner.capacity {
                 buffer_lock.push_back(item);
                 break;

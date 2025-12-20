@@ -1,15 +1,15 @@
-use std::{
-    error::Error,
-    fmt::{Debug, Display},
-};
+use std::{error::Error, fmt::Debug};
+use thiserror::Error;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
+#[error("send failed, channel is closed")]
 pub struct SendError<T>(pub T);
 
-impl<T> Display for SendError<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "send failed, channel is closed")
+impl<T> From<SendError<T>> for Box<dyn Error + Send>
+where
+    T: Send + Debug + 'static,
+{
+    fn from(err: SendError<T>) -> Self {
+        Box::new(err)
     }
 }
-
-impl<T: Debug> Error for SendError<T> {}
