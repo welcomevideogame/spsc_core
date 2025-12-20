@@ -2,9 +2,10 @@ use std::{error::Error, time::Duration};
 
 use tokio::join;
 
-use crate::blocking_spsc::{Receiver, Sender};
+use crate::spsc::{Receiver, Sender};
 
 mod blocking_spsc;
+mod spsc;
 
 async fn send_loop(tx: Sender<i32>) -> Result<(), Box<dyn Error + Send>> {
     for i in 0..10 {
@@ -25,7 +26,7 @@ async fn recv_loop(rx: Receiver<i32>) -> Option<()> {
 
 #[tokio::main]
 async fn main() {
-    let (tx, rx) = blocking_spsc::channel::<i32>(10);
+    let (tx, rx) = spsc::channel::<i32>(10);
     let (x, y) = join!(tokio::spawn(send_loop(tx)), tokio::spawn(recv_loop(rx)));
     _ = dbg!(x, y);
 }
