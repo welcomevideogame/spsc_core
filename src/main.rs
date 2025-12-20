@@ -1,8 +1,9 @@
 use std::{error::Error, time::Duration};
 
-use tokio::{join, select};
+use futures::StreamExt;
+use tokio::join;
 
-use crate::spsc::{Receiver, Sender, channel};
+use crate::spsc::{Receiver, ReceiverStream, Sender, channel};
 
 mod blocking_spsc;
 mod spsc;
@@ -17,14 +18,9 @@ async fn send_loop(tx: Sender<i32>) -> Result<(), Box<dyn Error + Send>> {
 }
 
 async fn recv_loop(rx: Receiver<i32>) -> Option<()> {
-    loop {
-        select! {
-            a = rx.recv() => match a {
-                Some(a) => println!("Got {:?}", a),
-                None => break,
-            },
-            _ = tokio::time::sleep(Duration::from_secs(10)) => break
-        };
+    let mut x = ReceiverStream::new(&rx);
+    while let Some(x) = x.next().await {
+        println!("Got {:?}", x);
     }
     println!("Done with recv");
     None

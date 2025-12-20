@@ -42,5 +42,5 @@ pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
 }
 
 pub use error::SendError;
-pub use receiver::Receiver;
+pub use receiver::{Receiver, ReceiverStream};
 pub use sender::Sender;
