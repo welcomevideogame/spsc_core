@@ -5,15 +5,16 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-pub struct Queue<T> {
+#[derive(Debug)]
+pub struct Channel<T> {
     buffer: VecDeque<T>,
     capacity: usize,
 }
 
-impl<T> Queue<T> {
+impl<T> Channel<T> {
     pub fn new(capacity: usize) -> (Sender<T>, Receiver<T>) {
         let vd = VecDeque::with_capacity(capacity);
-        let queue = Queue {
+        let queue = Channel {
             buffer: vd,
             capacity,
         };
@@ -28,8 +29,9 @@ impl<T> Queue<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct Sender<T> {
-    inner: Arc<Mutex<Queue<T>>>,
+    inner: Arc<Mutex<Channel<T>>>,
 }
 
 impl<T> Sender<T> {
@@ -38,8 +40,9 @@ impl<T> Sender<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct Receiver<T> {
-    inner: Arc<Mutex<Queue<T>>>,
+    inner: Arc<Mutex<Channel<T>>>,
 }
 
 impl<T> Sender<T> {
