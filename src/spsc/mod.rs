@@ -1,8 +1,11 @@
+#![allow(dead_code)]
+
+use std::collections::VecDeque;
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicBool, Ordering},
 };
-use std::{collections::VecDeque, sync::Condvar};
+use tokio::sync::{Mutex, Notify};
 mod error;
 mod receiver;
 mod sender;
@@ -12,7 +15,7 @@ struct Inner<T> {
     buffer: Mutex<VecDeque<T>>,
     capacity: usize,
     closed: AtomicBool,
-    condvar: Condvar,
+    notify: Notify,
 }
 
 impl<T> Inner<T> {
@@ -26,7 +29,7 @@ pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
         buffer: Mutex::new(VecDeque::with_capacity(capacity)),
         capacity,
         closed: AtomicBool::new(false),
-        condvar: Condvar::new(),
+        notify: Notify::new(),
     });
 
     let sender = Sender {

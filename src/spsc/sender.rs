@@ -8,25 +8,20 @@ pub struct Sender<T> {
 }
 
 impl<T> Sender<T> {
-    pub fn send(&self, item: T) -> Result<(), SendError<T>> {
-        if self.inner.is_closed() {
-            return Err(SendError(item));
-        }
-        let mut buffer_lock = self.inner.buffer.lock().unwrap();
+    pub async fn send(&self, item: T) -> Result<(), SendError<T>> {
         loop {
             if self.inner.is_closed() {
                 return Err(SendError(item));
             }
+            let mut buffer_lock = self.inner.buffer.lock().await;
             if buffer_lock.len() < self.inner.capacity {
                 buffer_lock.push_back(item);
                 break;
             }
-            buffer_lock = match self.inner.condvar.wait(buffer_lock) {
-                Ok(lock) => lock,
-                Err(_) => return Err(SendError(item)),
-            }
+            drop(buffer_lock);
+            self.inner.notify.notified().await;
         }
-        self.inner.condvar.notify_one();
+        self.inner.notify.notify_one();
         Ok(())
     }
 }
@@ -34,6 +29,6 @@ impl<T> Sender<T> {
 impl<T> Drop for Sender<T> {
     fn drop(&mut self) {
         self.inner.closed.store(true, Ordering::Release);
-        self.inner.condvar.notify_one();
+        self.inner.notify.notify_one();
     }
 }
