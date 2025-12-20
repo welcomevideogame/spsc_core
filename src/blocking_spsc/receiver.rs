@@ -11,11 +11,18 @@ impl<T> Receiver<T> {
     pub fn recv(&self) -> Option<T> {
         let mut buffer_lock = self.inner.buffer.lock().unwrap();
         loop {
+            if buffer_lock.len() == 0 && self.inner.is_closed() {
+                return None;
+            }
             if let Some(val) = buffer_lock.pop_front() {
                 self.inner.condvar.notify_one();
                 return Some(val);
             }
-            buffer_lock = self.inner.condvar.wait(buffer_lock).unwrap();
+            buffer_lock = self
+                .inner
+                .condvar
+                .wait_while(buffer_lock, |_| !self.inner.is_closed())
+                .ok()?;
         }
     }
 }
