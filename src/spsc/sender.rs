@@ -13,16 +13,21 @@ impl<T> Sender<T> {
             if self.inner.is_closed() {
                 return Err(SendError(item));
             }
-            let mut buffer_lock = self.inner.buffer.lock().await;
-            if buffer_lock.len() < self.inner.capacity {
-                buffer_lock.push_back(item);
-                break;
+
+            let tail = self.inner.tail.load(Ordering::Relaxed);
+            let head = self.inner.head.load(Ordering::Acquire);
+
+            let next = (tail + 1) % self.inner.capacity;
+            if next != head {
+                unsafe {
+                    (*self.inner.buffer[tail].get()).write(item);
+                }
+                self.inner.tail.store(next, Ordering::Release);
+                self.inner.notify.notify_one();
+                return Ok(());
             }
-            drop(buffer_lock);
             self.inner.notify.notified().await;
         }
-        self.inner.notify.notify_one();
-        Ok(())
     }
 }
 

@@ -16,16 +16,26 @@ pub struct Receiver<T> {
 impl<T> Receiver<T> {
     pub async fn recv(&self) -> Option<T> {
         loop {
-            let mut buffer_lock = self.inner.buffer.lock().await;
-            if buffer_lock.len() == 0 && self.inner.is_closed() {
-                return None;
-            }
-            if let Some(val) = buffer_lock.pop_front() {
+            let head = self.inner.head.load(Ordering::Relaxed);
+            let tail = self.inner.tail.load(Ordering::Acquire);
+
+            if head != tail {
+                let value = unsafe { (*self.inner.buffer[head].get()).assume_init_read() };
+
+                self.inner
+                    .head
+                    .store((head + 1) % self.inner.capacity, Ordering::Release);
                 self.inner.notify.notify_one();
-                return Some(val);
+                return Some(value);
             }
-            drop(buffer_lock);
-            self.inner.notify.notified().await;
+            if head == tail {
+                if self.inner.is_closed() {
+                    return None;
+                }
+
+                self.inner.notify.notified().await;
+                continue;
+            }
         }
     }
 }
@@ -46,7 +56,7 @@ impl<'a, T> ReceiverStream<'a, T> {
 
 impl<'a, T> Stream for ReceiverStream<'a, T>
 where
-    T: Send + 'a,
+    T: Send + Sync + 'a,
 {
     type Item = T;
 

@@ -29,5 +29,5 @@ async fn recv_loop(rx: Receiver<i32>) -> Option<()> {
 #[tokio::main]
 async fn main() {
     let (tx, rx) = channel::<i32>(10);
-    let (_, _) = join!(tokio::spawn(send_loop(tx)), tokio::spawn(recv_loop(rx)));
+    let (_, _) = join!(send_loop(tx), recv_loop(rx));
 }
