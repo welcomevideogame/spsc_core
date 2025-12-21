@@ -42,21 +42,26 @@ impl<T> Receiver<T> {
     /// Returns `Some(value)` if value is available, or `None` if the channel
     /// has been closed and all values have been consumed. If empty, it will
     /// asynchronously wait until a value is received.
+
     pub async fn recv(&self) -> Option<T> {
         loop {
             let head = self.inner.head.load(Ordering::Relaxed);
             let tail = self.inner.tail.load(Ordering::Acquire);
 
             if head == tail {
-                if self.inner.closed.load(Ordering::Relaxed) {
+                if self.inner.closed.load(Ordering::Acquire) {
                     return None;
                 }
 
                 poll_fn(|cx| {
                     self.inner.waker.register(cx.waker());
+
                     let head = self.inner.head.load(Ordering::Relaxed);
                     let tail = self.inner.tail.load(Ordering::Acquire);
+
                     if head != tail {
+                        Poll::Ready(())
+                    } else if self.inner.closed.load(Ordering::Acquire) {
                         Poll::Ready(())
                     } else {
                         Poll::Pending
@@ -64,11 +69,18 @@ impl<T> Receiver<T> {
                 })
                 .await;
 
+                let head = self.inner.head.load(Ordering::Relaxed);
+                let tail = self.inner.tail.load(Ordering::Acquire);
+                if head == tail && self.inner.closed.load(Ordering::Acquire) {
+                    return None;
+                }
+
                 continue;
             }
 
             // Safety: Consumer has exclusive access to this slot
             let value = unsafe { (*self.inner.buffer[head].get()).assume_init_read() };
+
             self.inner
                 .head
                 .store((head + 1) % self.inner.capacity, Ordering::Release);
