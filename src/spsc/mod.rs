@@ -128,7 +128,7 @@ impl<T> Inner<T> {
 /// assert_eq!(rx.recv().await.unwrap(), 1);
 /// ```
 pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
-    let buf = (0..capacity)
+    let buf = (0..=capacity)
         .into_iter()
         .map(|_| UnsafeCell::new(MaybeUninit::uninit()))
         .collect::<Vec<_>>()
@@ -155,3 +155,32 @@ pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
 pub use error::SendError;
 pub use receiver::{Receiver, ReceiverStream};
 pub use sender::Sender;
+
+#[cfg(test)]
+mod tests {
+    use crate::spsc::{SendError, channel};
+
+    #[tokio::test]
+    async fn test_basic_send_recv() {
+        let (tx, rx) = channel::<i32>(4);
+        tx.send(10).await.unwrap();
+        tx.send(20).await.unwrap();
+
+        assert_eq!(rx.recv().await, Some(10));
+        assert_eq!(rx.recv().await, Some(20));
+    }
+
+    #[tokio::test]
+    async fn test_sender_drop_behavior() {
+        let (tx, rx) = channel::<i32>(4);
+        drop(tx);
+        assert_eq!(rx.recv().await, None);
+    }
+
+    #[tokio::test]
+    async fn test_recv_drop_behavior() {
+        let (tx, rx) = channel::<i32>(4);
+        drop(rx);
+        assert_eq!(tx.send(1).await, Err(SendError(1)));
+    }
+}

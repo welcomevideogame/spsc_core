@@ -22,7 +22,7 @@ use thiserror::Error;
 ///     println!("Failed to send value: {}", value);
 /// }
 /// ```
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Clone, Error, PartialEq)]
 #[error("send failed, channel is closed")]
 pub struct SendError<T>(
     /// The value that failed to be sent
