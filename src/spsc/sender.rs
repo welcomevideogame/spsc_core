@@ -6,12 +6,37 @@ use std::{
 
 use crate::spsc::{Inner, SendError};
 
+/// The sending half of a single-producer, single-consumer asynchronous channel.
+///
+/// `Sender<T>` allows the producer task to asynchronously send values into the channel.
+///
+/// # Behavior
+/// - Only one `Sender` should exist per channel; cloning is possible but must be done carefully,
+///   as the channel is fundamentally **single-producer**.
+/// - If the buffer is full, `send` will asynchronously wait until space becomes available.
+/// - If the channel is closed, `send` will return an error.
+///
+/// # Example
+/// ```
+/// use spsc::channel;
+/// use tokio::spawn;
+///
+/// let (tx, rx) = channel::<i32>(16);
+///
+/// tokio::spawn(async move {
+///     tx.send(42).await.unwrap();
+/// });
+/// ```
 #[derive(Debug)]
 pub struct Sender<T> {
     pub(super) inner: Arc<Inner<T>>,
 }
 
 impl<T> Sender<T> {
+    /// Sends a value into the channel.
+    ///
+    /// If the channel is full, this method will asynchronously wait until space
+    /// becomes available. Returns `Err(item)` if the channel has been closed.
     pub async fn send(&self, item: T) -> Result<(), SendError<T>> {
         loop {
             if self.inner.is_closed() {
@@ -23,6 +48,7 @@ impl<T> Sender<T> {
 
             let next = (tail + 1) % self.inner.capacity;
             if next != head {
+                // Safety: Producer has exclusive access to this slot
                 unsafe {
                     (*self.inner.buffer[tail].get()).write(item);
                 }
