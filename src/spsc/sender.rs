@@ -1,4 +1,8 @@
-use std::sync::{Arc, atomic::Ordering};
+use std::{
+    future::poll_fn,
+    sync::{Arc, atomic::Ordering},
+    task::Poll,
+};
 
 use crate::spsc::{Inner, SendError};
 
@@ -23,10 +27,21 @@ impl<T> Sender<T> {
                     (*self.inner.buffer[tail].get()).write(item);
                 }
                 self.inner.tail.store(next, Ordering::Release);
-                self.inner.notify.notify_one();
+                self.inner.waker.wake();
                 return Ok(());
             }
-            self.inner.notify.notified().await;
+            poll_fn(|cx| {
+                self.inner.waker.register(cx.waker());
+
+                let tail = self.inner.tail.load(Ordering::Relaxed);
+                let head = self.inner.head.load(Ordering::Acquire);
+                if (tail + 1) % self.inner.capacity != head {
+                    Poll::Ready(())
+                } else {
+                    Poll::Pending
+                }
+            })
+            .await;
         }
     }
 }
@@ -34,6 +49,6 @@ impl<T> Sender<T> {
 impl<T> Drop for Sender<T> {
     fn drop(&mut self) {
         self.inner.closed.store(true, Ordering::Release);
-        self.inner.notify.notify_one();
+        self.inner.waker.wake();
     }
 }

@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use futures::task::AtomicWaker;
 use std::mem::MaybeUninit;
 use std::{
     cell::UnsafeCell,
@@ -8,7 +9,6 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
-use tokio::sync::Notify;
 mod error;
 mod receiver;
 mod sender;
@@ -22,7 +22,7 @@ struct Inner<T> {
     tail: AtomicUsize, // producer-owned
 
     closed: AtomicBool,
-    notify: Notify,
+    waker: AtomicWaker,
 }
 unsafe impl<T: Send> Send for Inner<T> {}
 unsafe impl<T: Sync> Sync for Inner<T> {}
@@ -46,7 +46,7 @@ pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
         head: AtomicUsize::new(0),
         tail: AtomicUsize::new(0),
         closed: AtomicBool::new(false),
-        notify: Notify::new(),
+        waker: AtomicWaker::new(),
     });
 
     let sender = Sender {

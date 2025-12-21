@@ -1,4 +1,5 @@
 use std::{
+    future::poll_fn,
     pin::Pin,
     sync::{Arc, atomic::Ordering},
     task::Poll,
@@ -19,23 +20,34 @@ impl<T> Receiver<T> {
             let head = self.inner.head.load(Ordering::Relaxed);
             let tail = self.inner.tail.load(Ordering::Acquire);
 
-            if head != tail {
-                let value = unsafe { (*self.inner.buffer[head].get()).assume_init_read() };
-
-                self.inner
-                    .head
-                    .store((head + 1) % self.inner.capacity, Ordering::Release);
-                self.inner.notify.notify_one();
-                return Some(value);
-            }
             if head == tail {
-                if self.inner.is_closed() {
+                if self.inner.closed.load(Ordering::Relaxed) {
                     return None;
                 }
 
-                self.inner.notify.notified().await;
+                poll_fn(|cx| {
+                    self.inner.waker.register(cx.waker());
+                    let head = self.inner.head.load(Ordering::Relaxed);
+                    let tail = self.inner.tail.load(Ordering::Acquire);
+                    if head != tail {
+                        Poll::Ready(())
+                    } else {
+                        Poll::Pending
+                    }
+                })
+                .await;
+
                 continue;
             }
+
+            // Safe because consumer has exclusive access to this slot
+            let value = unsafe { (*self.inner.buffer[head].get()).assume_init_read() };
+            self.inner
+                .head
+                .store((head + 1) % self.inner.capacity, Ordering::Release);
+
+            self.inner.waker.wake();
+            return Some(value);
         }
     }
 }
@@ -83,6 +95,6 @@ where
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
         self.inner.closed.store(true, Ordering::Release);
-        self.inner.notify.notify_one();
+        self.inner.waker.wake();
     }
 }
