@@ -16,12 +16,12 @@ Add this to your `Cargo.toml` once published:
 
 ```toml
 [dependencies]
-spsc_lab = "0.1.0"
+spsc_core = "0.1.0"
 ```
 
 ## Example
 ```rs
-use spsc_lab::channel;
+use spsc_core::channel;
 use tokio::spawn;
 
 #[tokio::main]
@@ -37,7 +37,7 @@ async fn main() {
 ```
 
 ## Performance
-Benchmarks show that `spsc_lab` can outperform standard async MPSC implementations such as Tokio’s channels in throughput-sensitive scenarios, making it ideal for performance-critical applications with SPSC requirements.
+Benchmarks show that `spsc_core` can outperform standard async MPSC implementations such as Tokio’s channels in throughput-sensitive scenarios, making it ideal for performance-critical applications with SPSC requirements.
 
 ## Safety
 - Internally uses UnsafeCell<MaybeUninit<T>>.
