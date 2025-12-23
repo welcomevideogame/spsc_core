@@ -70,11 +70,15 @@ impl<T> Sender<T> {
             .await;
         }
     }
+
+    pub fn close(&self) {
+        self.inner.closed.store(true, Ordering::Release);
+        self.inner.waker.wake();
+    }
 }
 
 impl<T> Drop for Sender<T> {
     fn drop(&mut self) {
-        self.inner.closed.store(true, Ordering::Release);
-        self.inner.waker.wake();
+        self.close()
     }
 }

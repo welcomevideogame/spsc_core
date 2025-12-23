@@ -42,7 +42,6 @@ impl<T> Receiver<T> {
     /// Returns `Some(value)` if value is available, or `None` if the channel
     /// has been closed and all values have been consumed. If empty, it will
     /// asynchronously wait until a value is received.
-
     pub async fn recv(&self) -> Option<T> {
         loop {
             let head = self.inner.head.load(Ordering::Relaxed);
@@ -88,6 +87,78 @@ impl<T> Receiver<T> {
             self.inner.waker.wake();
             return Some(value);
         }
+    }
+
+    /// Closes the channel.
+    ///
+    /// After calling `close`, the channel is marked as closed, and any
+    /// pending or future `recv` calls will return `None` once all buffered
+    /// items are consumed. This method also wakes any task currently
+    /// waiting on `recv` to notify them of the closure.
+    ///
+    /// # Example
+    /// ```
+    /// let (tx, rx) = channel::<i32>(16);
+    /// rx.close();
+    /// assert!(rx.recv().await.is_none());
+    /// ```
+    pub fn close(&self) {
+        self.inner.closed.store(true, Ordering::Release);
+        self.inner.waker.wake();
+    }
+
+    /// Returns the number of elements currently stored in the channel.
+    ///
+    /// This provides a snapshot of the number of items available for
+    /// consumption. It may not be entirely accurate in the presence of
+    /// concurrent sends or receives, but it is useful for monitoring or
+    /// debugging.
+    ///
+    /// # Example
+    /// ```
+    /// let (tx, rx) = channel::<i32>(16);
+    /// assert_eq!(rx.len(), 0);
+    /// tx.send(42).await.unwrap();
+    /// assert_eq!(rx.len(), 1);
+    /// ```
+    pub fn len(&self) -> usize {
+        let head = self.inner.head.load(Ordering::Acquire);
+        let tail = self.inner.tail.load(Ordering::Acquire);
+        tail.wrapping_sub(head) % self.inner.capacity
+    }
+
+    /// Returns `true` if the channel currently contains no elements.
+    ///
+    /// This is equivalent to checking `rx.len() == 0`. If `true`, any
+    /// call to `recv` will wait asynchronously for a value unless the
+    /// channel is closed.
+    ///
+    /// # Example
+    /// ```
+    /// let (tx, rx) = channel::<i32>(16);
+    /// assert!(rx.is_empty());
+    /// tx.send(10).await.unwrap();
+    /// assert!(!rx.is_empty());
+    /// ```
+    pub fn is_empty(&self) -> bool {
+        self.inner.head.load(Ordering::Acquire) == self.inner.tail.load(Ordering::Acquire)
+    }
+
+    /// Returns `true` if the channel's buffer is full.
+    ///
+    /// This is useful for determining whether sending a new value would
+    /// block or require the sender to wait. It compares the current number
+    /// of stored elements against the channel's capacity.
+    ///
+    /// # Example
+    /// ```
+    /// let (tx, rx) = channel::<i32>(2);
+    /// tx.send(1).await.unwrap();
+    /// tx.send(2).await.unwrap();
+    /// assert!(rx.is_full());
+    /// ```
+    pub fn is_full(&self) -> bool {
+        self.len() == self.inner.capacity
     }
 }
 
@@ -181,7 +252,6 @@ where
 
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
-        self.inner.closed.store(true, Ordering::Release);
-        self.inner.waker.wake();
+        self.close();
     }
 }

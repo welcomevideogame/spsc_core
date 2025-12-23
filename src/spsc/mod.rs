@@ -128,7 +128,7 @@ impl<T> Inner<T> {
 /// assert_eq!(rx.recv().await.unwrap(), 1);
 /// ```
 pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
-    let buf = (0..=capacity)
+    let buf = (0..capacity)
         .into_iter()
         .map(|_| UnsafeCell::new(MaybeUninit::uninit()))
         .collect::<Vec<_>>()
